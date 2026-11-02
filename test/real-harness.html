@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="zh">
+<head>
+<meta charset="utf-8">
+<title>dsh-agent-hardware-sensors widget harness</title>
+<style>
+body{margin:0;background:#161618;color:#eee;font:13px system-ui}
+#composer{position:fixed;bottom:10px;left:10px;width:200px;height:40px}
+</style>
+</head>
+<body>
+<div id="composer"><textarea placeholder="mock composer"></textarea></div>
+
+<!--
+  挂件源码**不能**直接内联进 <script>：源码里含有 `<`、`&&` 等字符，极少数序列
+  会被 HTML 解析器误判成标签，导致 "Invalid or unexpected token" 而整段不执行
+  （真机 headless 实测踩过）。这里放进 type="text/plain" 的容器里，
+  读取 textContent 后再 eval，彻底绕开 HTML 解析。
+-->
+<script type="text/plain" id="widget-src">__WIDGET_SRC__</script>
+
+<script>
+// 模拟桌面端外壳标记
+document.documentElement.setAttribute('data-windows-titlebar', '')
+
+// 模拟 installWindowsMenu() 的原生菜单 host
+var m = document.createElement('div')
+m.setAttribute('data-windows-menu', '')
+var sh = m.attachShadow({ mode: 'open' })
+sh.innerHTML = '<div role="menubar"><button>应用</button><button>编辑</button></div>'
+m.style.cssText = 'position:fixed;top:0;left:48px;height:40px;display:flex;align-items:center;z-index:1100'
+document.body.appendChild(m)
+
+// 遗留节点：验证单例清理（应该是 0 个残留）
+var r1 = document.createElement('div'); r1.setAttribute('data-dshhw', '1'); document.body.appendChild(r1)
+var r2 = document.createElement('div'); r2.setAttribute('data-dshhw', '1'); document.body.appendChild(r2)
+var rb = document.createElement('button'); rb.id = 'dshhw-title-entry'; document.body.appendChild(rb)
+
+// 模拟宿主接口
+window.fetch = function () {
+  return Promise.resolve({
+    ok: true, status: 200,
+    json: function () {
+      return Promise.resolve({
+        live: true, matched: 4,
+        sources: [
+          { app: 'hwinfo', available: true, transport: 'shared-memory', count: 4 },
+          { app: 'aida64', available: false, transport: 'none', count: 0, reason: 'none' }
+        ],
+        sensors: [
+          { app: 'hwinfo', id: '1', group: 'CPU AMD', label: 'CPU (Tctl/Tdie)', value: 56, unit: '℃', category: 'temperature' },
+          { app: 'hwinfo', id: '2', group: 'CPU AMD', label: 'CPU CCD1 (Tdie)', value: 55.5, unit: '℃', category: 'temperature' },
+          { app: 'hwinfo', id: '3', group: 'GPU Intel', label: '显存温度', value: 56, unit: '℃', category: 'temperature' },
+          { app: 'hwinfo', id: '4', group: 'GPU Intel', label: 'GPU 全局温度', value: 56, unit: '℃', category: 'temperature' }
+        ],
+        changes: []
+      })
+    }
+  })
+}
+
+window.__errors = []
+window.onerror = function (msg, src, line, col) {
+  window.__errors.push({ msg: String(msg), line: line, col: col })
+  return false
+}
+
+// 从 text/plain 容器取出源码并执行
+try {
+  (0, eval)(document.getElementById('widget-src').textContent)
+  window.__widgetMounted = true
+} catch (e) {
+  window.__widgetError = String(e && e.message)
+}
+</script>
+</body>
+</html>

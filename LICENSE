@@ -1,0 +1,57 @@
+MIT License
+
+Copyright (c) 2026 dsh-agent-hardware-sensors contributors
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+Third-party notice
+
+This plugin reads data that other, separately-licensed software exports. It
+does not bundle, modify, or redistribute any part of that software.
+
+- AIDA64 (FinalWire Ltd.) — proprietary commercial software. This plugin
+  reads the sensor values AIDA64 exports to the Windows registry
+  (`HKCU\Software\FinalWire\AIDA64\SensorValues`) or to the
+  `AIDA64_SensorValues` shared-memory mapping. See
+  docs/aida64-sensor-export.md for the observed format.
+- HWiNFO (HWiNFO Community / Martin Malik) — proprietary software. This
+  plugin reads the `HKLM|HKCU\Software\HWiNFO64\VSB` registry values and the
+  `Global\HWiNFO_SENS_SM2` shared-memory section. See
+  docs/hwinfo-sensor-format.md.
+
+IMPORTANT — HWiNFO shared-memory specification
+
+The official HWiNFO shared-memory layout is **not public**. Its author states
+on the official forum (pinned thread "Shared Memory Support") that the
+specification is provided by e-mail only, under conditions that include:
+consumers of the interface must be freeware without advertising, and
+open-source applications must keep the interfacing part in binary (closed)
+form.
+
+The layout implemented in `lib/hwinfo.js` was derived independently, by
+observing the bytes of a running instance and cross-checking with public
+third-party reverse-engineering and open-source parsers. It is published here
+as documentation of what was observed, not as a licensed or authorized
+specification.
+
+If you intend to distribute this plugin publicly, review that condition
+against your own distribution. If you are the rights holder and want this
+removed or changed, open an issue and it will be handled promptly.

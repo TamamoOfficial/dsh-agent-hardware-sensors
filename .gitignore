@@ -1,0 +1,23 @@
+# 依赖与构建产物
+node_modules/
+pnpm-lock.yaml
+package-lock.json
+
+# 测试与运行时的临时文件
+*.log
+.tmp/
+coverage/
+test/fixtures/*.local.*
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 本机实测数据（不应入库：含个人环境、驱动器序列号等）
+*.dshhw-*
+probe-*.json
+_smwait*
+_hw*
