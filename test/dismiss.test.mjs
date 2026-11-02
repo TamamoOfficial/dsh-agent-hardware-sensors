@@ -94,7 +94,8 @@ function boot(opts) {
     changes: [],
   }
   const timers = []
-  globalThis.MutationObserver = class { constructor(cb) { this.cb = cb } observe() {} disconnect() {} }
+  globalThis.ResizeObserver = class { constructor(cb) { this.cb = cb } observe() {} disconnect() {} }
+globalThis.MutationObserver = class { constructor(cb) { this.cb = cb } observe() {} disconnect() {} }
   globalThis.window = {
     innerWidth: 1280, innerHeight: 800,
     localStorage: {

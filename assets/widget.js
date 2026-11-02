@@ -62,6 +62,32 @@
   var host = null
   var state = { pos: null, sensors: [], sources: [], live: false, expand: false, timer: null, failing: 0 }
 
+  /**
+   * 把坐标钳制到当前可视区内。
+   *
+   * ⚠ 这是个**真实缺陷**的修复：坐标是按旧窗口尺寸保存的，窗口缩小（比如从全屏
+   *   退出到非全屏）后会留在屏幕外 —— 用户完全看不到挂件，且它永远不会自愈。
+   *   真机实测：1920 窗口里存 (1700,900)，缩到 1200x700 后超出右侧 714px、
+   *   超出底部 301px。
+   *
+   * 剩余尺寸未知时（首次渲染、元素还没布局）用一个保守的估算宽高，宁可多留
+   * 一点边距也不要放出去。
+   */
+  function clampPos(pos, pad) {
+    if (!pos) return null
+    var vw = window.innerWidth || 800
+    var vh = window.innerHeight || 600
+    var w = (host && host.offsetWidth) || 140
+    var h = (host && host.offsetHeight) || 44
+    var margin = (pad === undefined ? 4 : pad)
+    var maxX = Math.max(margin, vw - w - margin)
+    var maxY = Math.max(margin, vh - h - margin)
+    return {
+      x: Math.round(Math.max(margin, Math.min(maxX, pos.x))),
+      y: Math.round(Math.max(margin, Math.min(maxY, pos.y))),
+    }
+  }
+
   function loadPos() {
     try {
       var raw = window.localStorage.getItem(POS_KEY)
@@ -271,6 +297,12 @@
     }
 
     if (state.pos) {
+      // 每次渲染都钳制一次：窗口变小后旧坐标会把挂件推到可视区外（真机复现过）。
+      var p = clampPos(state.pos)
+      if (p && (p.x !== state.pos.x || p.y !== state.pos.y)) {
+        state.pos = p
+        savePos()
+      }
       host.style.left = state.pos.x + 'px'
       host.style.top = state.pos.y + 'px'
       host.style.right = 'auto'
@@ -1005,6 +1037,26 @@
     installTitleEntry()
     watchTitleEntry()
     document.addEventListener('visibilitychange', function () { poll() })
+    // 窗口尺寸变化 / 进出全屏后重新钳制位置。
+    // （`resize` 在多数情况下够用；`fullscreenchange` 覆盖"编辑器没触发 resize"
+    //   的情形，两者的回调都是幂等的钳制。）
+    var onViewportChange = function () {
+      try { render() } catch (e) {}
+      try {
+        var b = document.getElementById(TITLE_BTN_ID)
+        if (b) positionTitleEntry(b)
+      } catch (e) {}
+    }
+    window.addEventListener('resize', onViewportChange)
+    document.addEventListener('fullscreenchange', onViewportChange)
+    try {
+      // 有些桌面壳在窗口状态变化时既不触发 resize 也不触发 fullscreenchange，
+      // 用 ResizeObserver 兜一层（只观察尺寸，不观察子树变化）。
+      if (typeof ResizeObserver === 'function' && document.documentElement) {
+        state.viewportObserver = new ResizeObserver(onViewportChange)
+        state.viewportObserver.observe(document.documentElement)
+      }
+    } catch (e) {}
   }
 
   // 收数后同步刷新两个界面：面板里的全量列表 + 标题栏徽标

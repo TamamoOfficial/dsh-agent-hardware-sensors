@@ -27,6 +27,7 @@ const ORDER = [
   'titlebar_entry.test.mjs',
   'toast.test.mjs',
   'dismiss.test.mjs',
+  'viewport.test.mjs',
   'realbrowser.test.mjs',
   // 真实输入事件（CDP）：交互层唯一可信的证据，放最后
   'realinput.test.mjs',

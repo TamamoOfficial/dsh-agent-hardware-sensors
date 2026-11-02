@@ -62,7 +62,11 @@ globalThis.window = {
     setItem(k, v) { this._d[k] = String(v) },
   },
   fetch: async () => ({ ok: true, json: async () => payload }),
+  // 挂件在 mount 时会挂 resize / fullscreenchange 监听（视口变化重新钳制位置），
+  // 伪 DOM 必须提供它们，否则 mount 直接抛 TypeError。
+  addEventListener() {}, removeEventListener() {},
 }
+globalThis.ResizeObserver = class { constructor(cb) { this.cb = cb } observe() {} disconnect() {} }
 globalThis.document = {
   body, head, hidden: false,
   getElementById: () => null,

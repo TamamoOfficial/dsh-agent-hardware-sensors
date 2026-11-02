@@ -48,7 +48,8 @@ async function renderWith(sensors, sources) {
 
   const payload = { live: true, sources, matched: sensors.length, sensors }
   const winLis = {}
-  globalThis.MutationObserver = class { constructor(cb) { this.cb = cb } observe() {} disconnect() {} }
+  globalThis.ResizeObserver = class { constructor(cb) { this.cb = cb } observe() {} disconnect() {} }
+globalThis.MutationObserver = class { constructor(cb) { this.cb = cb } observe() {} disconnect() {} }
   globalThis.window = {
     innerWidth: 1280, innerHeight: 800,
     localStorage: { _d: {}, getItem(k) { return this._d[k] === undefined ? null : this._d[k] }, setItem(k, v) { this._d[k] = String(v) } },

@@ -40,7 +40,8 @@ function boot(payloadFirst) {
   html._attrs['data-windows-titlebar'] = ''
   let next = payloadFirst
   const timers = []
-  globalThis.MutationObserver = class { constructor(cb) { this.cb = cb } observe() {} disconnect() {} }
+  globalThis.ResizeObserver = class { constructor(cb) { this.cb = cb } observe() {} disconnect() {} }
+globalThis.MutationObserver = class { constructor(cb) { this.cb = cb } observe() {} disconnect() {} }
   globalThis.window = {
     innerWidth: 1280, innerHeight: 800,
     localStorage: { _d: {}, getItem(k) { return this._d[k] === undefined ? null : this._d[k] }, setItem(k, v) { this._d[k] = String(v) } },

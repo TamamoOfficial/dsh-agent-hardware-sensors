@@ -78,6 +78,7 @@ const payload = {
 
 const observers = []
 const listeners = {}
+globalThis.ResizeObserver = class { constructor(cb) { this.cb = cb } observe() {} disconnect() {} }
 globalThis.MutationObserver = class { constructor(cb) { this.cb = cb; observers.push(this) } observe() {} disconnect() {} }
 globalThis.window = {
   innerWidth: 1280, innerHeight: 800,
