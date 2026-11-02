@@ -101,8 +101,12 @@ async function main() {
   console.log('缩窗后:', JSON.stringify(small))
   ok('缩窗后挂件仍完全在可视区内（不再跑到屏幕外）', small.fullyInside === true, JSON.stringify(small))
   ok('缩窗后无任何越界', small.offX === 0 && small.offY === 0, 'offX=' + small.offX + ' offY=' + small.offY)
-  ok('存储坐标已同步为钳制后的值（下次打开也正确）',
-     String(small.storedPos).indexOf(String(small.left)) >= 0, 'stored=' + small.storedPos + ' left=' + small.left)
+  // 坐标模型是"两份"：posUser（用户想要的位置，存盘、不因钳制改变）与
+  // posShown（= clamp(posUser) 后的显示位置）。缩窗时**只改 posShown**，
+  // 存盘必须保留原值 —— 这样放大窗口后能还原（见 position_memory.test.mjs）。
+  ok('缩窗不覆盖存储的用户位置（保留原位以便放大后还原）',
+     JSON.stringify(small.storedPos) === JSON.stringify('{"x":1700,"y":900}'),
+     'stored=' + small.storedPos)
 
   // ── 3. 极小窗口（更极端）──
   await send('Emulation.setDeviceMetricsOverride', { width: 640, height: 420, deviceScaleFactor: 1, mobile: false })

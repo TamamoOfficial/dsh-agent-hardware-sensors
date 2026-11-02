@@ -60,18 +60,22 @@
   }
 
   var host = null
-  var state = { pos: null, sensors: [], sources: [], live: false, expand: false, timer: null, failing: 0 }
+  // 坐标模型（两份，别混用）：
+  //   state.posUser  = **用户想要的位置**：拖动时写入、存进 localStorage，
+  //                    窗口变大后要还原到这个位置。
+  //   state.posShown = **当前实际显示的位置**：= clamp(posUser, 当前视口)。
+  //                    缩窗时它被收进可视区，但**不改 posUser** —— 放大回去就还原。
+  // 早先只有一份 pos，缩窗时把钳制结果写回存储，导致"回全屏也停在缩过的位置"。
+  var state = { posUser: null, posShown: null, sensors: [], sources: [], live: false, expand: false, timer: null, failing: 0 }
 
   /**
    * 把坐标钳制到当前可视区内。
    *
-   * ⚠ 这是个**真实缺陷**的修复：坐标是按旧窗口尺寸保存的，窗口缩小（比如从全屏
-   *   退出到非全屏）后会留在屏幕外 —— 用户完全看不到挂件，且它永远不会自愈。
-   *   真机实测：1920 窗口里存 (1700,900)，缩到 1200x700 后超出右侧 714px、
-   *   超出底部 301px。
+   * ⚠ 修的是个**真实缺陷**：坐标按旧窗口尺寸保存，窗口缩小（如退出全屏）后会留在
+   *   屏幕外 —— 用户完全看不到挂件，且它永远不会自愈。
+   *   真机实测：1920 窗口里存 (1700,900)，缩到 1200x700 后超出右侧 714px、底部 301px。
    *
-   * 剩余尺寸未知时（首次渲染、元素还没布局）用一个保守的估算宽高，宁可多留
-   * 一点边距也不要放出去。
+   * 元素尺寸未知时（首次渲染、还没布局）用保守估算，宁可多留边距也不要放出去。
    */
   function clampPos(pos, pad) {
     if (!pos) return null
@@ -88,16 +92,28 @@
     }
   }
 
+  /** 依据 posUser + 当前视口，算出该显示在哪里（幂等，可反复调用）。 */
+  function syncShownPos() {
+    if (!state.posUser) { state.posShown = null; return null }
+    state.posShown = clampPos(state.posUser)
+    return state.posShown
+  }
+
   function loadPos() {
     try {
       var raw = window.localStorage.getItem(POS_KEY)
       if (!raw) return null
       var p = JSON.parse(raw)
-      if (p && Number.isFinite(p.x) && Number.isFinite(p.y)) return p
+      if (p && Number.isFinite(p.x) && Number.isFinite(p.y)) return { x: p.x, y: p.y }
     } catch (e) {}
     return null
   }
-  function savePos() { try { if (state.pos) window.localStorage.setItem(POS_KEY, JSON.stringify(state.pos)) } catch (e) {} }
+  /** 只保存**用户想要的位置**（posUser）；钳制后的展示位置绝不写盘。 */
+  function savePos() {
+    try {
+      if (state.posUser) window.localStorage.setItem(POS_KEY, JSON.stringify(state.posUser))
+    } catch (e) {}
+  }
 
   /** 注入一段样式表（按 id 幂等）。 */
   function css(id, text) {
@@ -296,17 +312,16 @@
       host.appendChild(all)
     }
 
-    if (state.pos) {
-      // 每次渲染都钳制一次：窗口变小后旧坐标会把挂件推到可视区外（真机复现过）。
-      var p = clampPos(state.pos)
-      if (p && (p.x !== state.pos.x || p.y !== state.pos.y)) {
-        state.pos = p
-        savePos()
+    // 显示位置 = 钳制后的 posUser。**每帧重算、绝不写回存储**：
+    // 缩窗时临时收进可视区，窗口放大回去后自动还原到用户原来的位置。
+    if (state.posUser) {
+      var shown = syncShownPos()
+      if (shown) {
+        host.style.left = shown.x + 'px'
+        host.style.top = shown.y + 'px'
+        host.style.right = 'auto'
+        host.style.bottom = 'auto'
       }
-      host.style.left = state.pos.x + 'px'
-      host.style.top = state.pos.y + 'px'
-      host.style.right = 'auto'
-      host.style.bottom = 'auto'
     }
   }
 
@@ -334,12 +349,18 @@
         }
       }
       if (!moved) return   // 未超过阈值时不移动，避免"手抖"导致位置跳动
+      // 拖动写的是 **posUser**（用户想要的位置），并同步算出显示位置。
+      // 这里不再单独 clamp 坐标：clampPos 会在 render 里统一应用，
+      // 分两处各自钳制容易出现"拖出边界后松手位置跳一下"。
       var w = host.offsetWidth || 120, hh = host.offsetHeight || 40
       var x = Math.max(4, Math.min(window.innerWidth - w - 4, ev.clientX - drag.dx))
       var y = Math.max(4, Math.min(window.innerHeight - hh - 4, ev.clientY - drag.dy))
-      state.pos = { x: Math.round(x), y: Math.round(y) }
-      host.style.left = state.pos.x + 'px'; host.style.top = state.pos.y + 'px'
-      host.style.right = 'auto'; host.style.bottom = 'auto'
+      state.posUser = { x: Math.round(x), y: Math.round(y) }
+      var shown = syncShownPos()
+      if (shown) {
+        host.style.left = shown.x + 'px'; host.style.top = shown.y + 'px'
+        host.style.right = 'auto'; host.style.bottom = 'auto'
+      }
     })
     var end = function () {
       if (!drag) return
@@ -1027,7 +1048,8 @@
       var staleBtns = document.querySelectorAll('[id="' + TITLE_BTN_ID + '"]')
       for (var bi = 1; bi < staleBtns.length; bi++) { try { staleBtns[bi].remove() } catch (e) {} }
     } catch (e) {}
-    state.pos = loadPos()
+    state.posUser = loadPos()
+    syncShownPos()   // 首次按当前视口算出显示位置（旧坐标可能已越界）
     attachDrag()
     render()
     poll()
