@@ -17,19 +17,47 @@
 
 ## 安装
 
-桌面端（官方 Electron 客户端）读的是 **`desktop` profile**，普通 CLI 拒绝管理它，必须用桌面客户端自带的 CLI 入口：
+三种方式任选其一。**注意 profile**：桌面端（官方 Electron 客户端）读的是 `desktop` profile，普通 `dsh` CLI 会拒绝管理它 —— 必须用**桌面客户端自带的** CLI 入口。
+
+### 方式 A：直接从 GitHub 安装（推荐）
+
+一条命令，之后可随仓库更新：
 
 ```powershell
-& "<安装目录>\resources\runtime\cli\bin\dsh.cmd" plugin --profile desktop add link:<本目录绝对路径>
+# 桌面端：用客户端自带的 CLI
+& "<安装目录>\resources\runtime\cli\bin\dsh.cmd" plugin --profile desktop add github:EritXiaodou/dsh-agent-hardware-sensors
+
+# Web profile
+dsh plugin --profile web add github:EritXiaodou/dsh-agent-hardware-sensors
 ```
 
-Web profile 用：
+> 已验证：该规格会写入 profile 的 `dependencies` 与 `dsh.profile.bundles`，装成真实目录（非软链）。
+> 需要走代理时先设 `$env:https_proxy` / `$env:http_proxy` 再执行。
 
-```bash
-dsh plugin --profile web add link:<本目录绝对路径>
+### 方式 B：克隆后本地 link 安装（开发/改代码用）
+
+```powershell
+git clone https://github.com/EritXiaodou/dsh-agent-hardware-sensors
+& "<安装目录>\resources\runtime\cli\bin\dsh.cmd" plugin --profile desktop add link:<克隆下来的目录绝对路径>
 ```
 
-装完重启客户端（新 bundle 行需要宿主重新收集注入表）。
+`link:` 是软链安装：改源码立即生效，但**装完不能移动该目录**，移动后要重新 `add`。
+
+### 方式 C：从已下载的目录安装
+
+```powershell
+& "<安装目录>\resources\runtime\cli\bin\dsh.cmd" plugin --profile desktop add link:D:\Plugins\dsh-agent-hardware-sensors
+```
+
+### 装完之后
+
+**重启客户端**（新 bundle 行需要宿主重新收集注入表），然后刷新页面（`Ctrl+F5`）。
+
+更新到最新版：
+
+```powershell
+& "<安装目录>\resources\runtime\cli\bin\dsh.cmd" plugin --profile desktop add github:EritXiaodou/dsh-agent-hardware-sensors
+```
 
 ## 开启数据导出（任选其一，或都开）
 
