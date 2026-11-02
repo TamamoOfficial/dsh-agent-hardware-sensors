@@ -28,6 +28,8 @@ const ORDER = [
   'toast.test.mjs',
   'dismiss.test.mjs',
   'realbrowser.test.mjs',
+  // 真实输入事件（CDP）：交互层唯一可信的证据，放最后
+  'realinput.test.mjs',
 ]
 
 const present = new Set(readdirSync(here))

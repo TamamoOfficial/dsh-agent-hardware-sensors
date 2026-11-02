@@ -38,7 +38,9 @@
   var BASE = '/dsh-hw'
   var POS_KEY = 'dshhw-pos'
   var MODE_KEY = 'dshhw-mode'
-  var MODES = ['full', 'mini', 'off', 'dismissed']
+  // 只有 full / mini 两个可循环档位；dismissed 是"彻底收起"。
+  // 'off' 只作旧版存储值保留，读到就迁移成 dismissed（见 readMode）。
+  var MODES = ['full', 'mini', 'dismissed']
   var POLL_MS = 2000        // HWiNFO 自身 ~2s、AIDA64 1s：再快没有意义，只多耗 CPU
 
   function readMode() {
@@ -92,17 +94,14 @@
       '  border-radius:10px;padding:5px 9px;min-width:104px;max-width:340px;',
       '  backdrop-filter:blur(7px);box-shadow:0 4px 18px rgba(0,0,0,.35);',
       '  user-select:none;touch-action:none;}',
-      '.dshhw.dshhw-off{min-width:0;max-width:none;padding:4px;right:10px;bottom:10px;background:transparent;border:0;box-shadow:none;backdrop-filter:none}',
       // 彻底收起：节点还在（保留状态与轮询），但完全不可见、不占位、不挡点击
       '.dshhw.dshhw-dismissed{display:none}',
       '.dshhw.dshhw-mini{min-width:0}',
       '.dshhw-row{display:flex;justify-content:space-between;gap:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}',
       '.dshhw-row b{font-weight:600;font-variant-numeric:tabular-nums;color:var(--dsw-alias-text-primary,#f2f2f2)}',
       '.dshhw-h{display:flex;align-items:center;gap:6px;cursor:grab;margin:-1px 0 3px;font-weight:600;color:var(--dsw-alias-text-primary,#f2f2f2)}',
-      '.dshhw-off .dshhw-h{margin:0;cursor:pointer}',
       '.dshhw-dot{width:7px;height:7px;border-radius:50%;background:#3fb950;flex:0 0 auto}',
       '.dshhw-dot.warn{background:#d29922}.dshhw-dot.off{background:#8b8b8b}',
-      '.dshhw-off .dshhw-dot{opacity:.5}.dshhw-off:hover .dshhw-dot{opacity:1}',
       '.dshhw-all{display:none;margin-top:4px;padding-top:4px;max-height:200px;overflow:auto;border-top:1px solid var(--dsw-alias-border,rgba(255,255,255,.1))}',
       '.dshhw.dshhw-open .dshhw-all{display:block}',
       '.dshhw-hint{opacity:.62;font-size:11px;margin-top:2px}',
@@ -175,14 +174,26 @@
   function render() {
     if (!host) return
     var mode = readMode()
-    // `dismissed`（Shift+点击小点后写入）= 用户彻底收起悬浮提示：
+    // `dismissed`（Shift+点击 ◦ 后写入）= 用户彻底收起悬浮提示：
     // 连"可点回的小圆点"也不留，恢复入口只在详细信息面板里。
     if (mode === 'dismissed') {
       host.className = 'dshhw dshhw-dismissed'
       try { while (host.firstChild) host.removeChild(host.firstChild) } catch (e) {}
       return
     }
-    host.className = 'dshhw' + (mode === 'off' ? ' dshhw-off' : mode === 'mini' ? ' dshhw-mini' : '')
+    // 只有两档：full / mini。
+    // 早先还有一个 `off` 档（只渲染一个小圆点），但它把 ◦ 按钮也一起藏了，
+    // 导致"完整 → 精简 → 隐藏 → 完整"这条循环**走不到第三步**（真机实测：
+    // off 档时 hasCycDot=false，◦ 不存在）。既然 `dismissed` 已经承担"彻底收起"，
+    // 就把 `off` 并入它，档位模型简化为两档，循环永远可逆。
+    // （readMode 已把旧的 'off' 存储值迁移成 dismissed；这里再判一次是防御
+    //   有人手改 localStorage 的情况。）
+    if (mode === 'off' || mode === 'dismissed') {
+      host.className = 'dshhw dshhw-dismissed'
+      try { while (host.firstChild) host.removeChild(host.firstChild) } catch (e) {}
+      return
+    }
+    host.className = 'dshhw' + (mode === 'mini' ? ' dshhw-mini' : '')
       + (state.expand && mode === 'full' ? ' dshhw-open' : '')
       + (state.live || state.sensors.length ? '' : ' dshhw-empty')
 
@@ -196,22 +207,21 @@
       : (state.sources.map(function (s) { return s.app + ': ' + (s.reason || '不可用') }).join(' / ') || '未探测')
     h.appendChild(dot)
 
-    if (mode !== 'off') {
+    {
       var t = document.createElement('span')
       t.textContent = appNames() || '硬件读数'
       h.appendChild(t)
 
-      // 右上角小点：普通点击循环档位（完整 → 精简 → 隐藏 → 完整）；
-      // **Shift+点击** = 直接把整个悬浮提示收起来（与"隐藏档位"不同，
-      // 隐藏档位仍保留一个可点回的小圆点，Shift+点击则是彻底不显示，
-      // 恢复入口只在详细信息面板里 —— 这就是用户要的"藏起来"）。
+      // 右上角 ◦：普通点击在 **完整 ⇄ 精简** 之间切换（可逆）；
+      // **Shift+点击** = 彻底收起（进 `dismissed`，连 ◦ 都不留，恢复入口在面板里）。
+      // 这里不再有 `off` 档：它会把 ◦ 一起藏起来，使循环单向死锁（真机实测证实）。
       var cyc = document.createElement('span')
       cyc.textContent = '◦'
-      cyc.title = '点击切换档位（完整/精简/隐藏）· Shift+点击：彻底隐藏此悬浮提示'
+      cyc.title = '点击切换：完整 ⇄ 精简 · Shift+点击：彻底收起（可在详细面板恢复）'
       cyc.style.cssText = 'margin-left:auto;padding:0 2px;cursor:pointer;opacity:.55;font-weight:700'
       cyc.onclick = function (ev) {
         ev.stopPropagation()
-        // Shift+点击：彻底隐藏（写入 dismissed 标记，不再渲染卡片）
+        // Shift+点击：彻底收起（写入 dismissed，不再渲染卡片）
         if (ev.shiftKey) {
           writeMode('dismissed')
           hideToast()
@@ -219,25 +229,22 @@
           return
         }
         var cur = readMode()
-        var next = cur === 'full' ? 'mini' : cur === 'mini' ? 'off' : 'full'
+        var next = cur === 'mini' ? 'full' : 'mini'
         if (next !== 'full') state.expand = false
-        writeMode(next); render()
-        if (cur === 'off') poll() // 隐藏期间没有采样，恢复时立刻补一次
+        writeMode(next)
+        render()
       }
       h.appendChild(cyc)
     }
     // 标题区点击：展开/收起完整读数列表
     h.onclick = function () {
-      if (readMode() === 'off') { writeMode('full'); render(); poll(); return }
       if (readMode() === 'mini') { writeMode('full'); state.expand = true; render(); return }
       state.expand = !state.expand
       render()
     }
-    h.title = mode === 'off' ? '硬件读数挂件：点击恢复显示'
-      : '拖动移动 · 点击展开/收起 · ◦ 切换档位'
+    h.title = '拖动移动 · 点击展开/收起 · ◦ 切换完整/精简 · Shift+点击 ◦ 彻底收起'
     host.appendChild(h)
 
-    if (mode === 'off') return // 只留小圆点
 
     var key = pickKey(state.sensors)
     if (key.length) {
@@ -272,20 +279,29 @@
   }
 
   function attachDrag() {
-    var drag = null, moved = false
+    var drag = null, moved = false, capturing = false
     host.addEventListener('pointerdown', function (ev) {
       if (!ev.target || !ev.target.closest || !ev.target.closest('.dshhw-h')) return
       var r = host.getBoundingClientRect()
       // sx/sy 是**本次按下**的指针位置：用它判断是否移动过。
-      // 早先用 state.pos0（只在挂载时取一次）会在拖动一次后变成陈旧值，
-      // 导致之后普通点击被误判成拖动、点击展开被吞掉。
-      drag = { dx: ev.clientX - r.left, dy: ev.clientY - r.top, sx: ev.clientX, sy: ev.clientY }
+      drag = { dx: ev.clientX - r.left, dy: ev.clientY - r.top, sx: ev.clientX, sy: ev.clientY, pid: ev.pointerId }
       moved = false
-      try { host.setPointerCapture(ev.pointerId) } catch (e) {}
+      capturing = false
+      // ⚠ **不要**在这里 setPointerCapture。
+      // pointerdown 一捕获，指针就归 host 所有，浏览器随后合成的 click 会落在
+      // host 而不是原来的 ◦/标题上 —— 结果就是"点不动"（真机实测：clicksSeen 为空）。
+      // 改为只在**确认开始拖动**（超过阈值）后才捕获。
     })
     host.addEventListener('pointermove', function (ev) {
       if (!drag) return
-      if (Math.abs(ev.clientX - drag.sx) > 3 || Math.abs(ev.clientY - drag.sy) > 3) moved = true
+      if (Math.abs(ev.clientX - drag.sx) > 3 || Math.abs(ev.clientY - drag.sy) > 3) {
+        moved = true
+        if (!capturing) {
+          capturing = true
+          try { host.setPointerCapture(drag.pid || ev.pointerId) } catch (e) {}
+        }
+      }
+      if (!moved) return   // 未超过阈值时不移动，避免"手抖"导致位置跳动
       var w = host.offsetWidth || 120, hh = host.offsetHeight || 40
       var x = Math.max(4, Math.min(window.innerWidth - w - 4, ev.clientX - drag.dx))
       var y = Math.max(4, Math.min(window.innerHeight - hh - 4, ev.clientY - drag.dy))
@@ -293,11 +309,29 @@
       host.style.left = state.pos.x + 'px'; host.style.top = state.pos.y + 'px'
       host.style.right = 'auto'; host.style.bottom = 'auto'
     })
-    var end = function () { if (drag) { drag = null; if (moved) savePos() } }
+    var end = function () {
+      if (!drag) return
+      var wasMoved = moved
+      drag = null
+      if (capturing) {
+        capturing = false
+        try { host.releasePointerCapture(1) } catch (e) {}
+      }
+      if (wasMoved) savePos()
+    }
     host.addEventListener('pointerup', end)
     host.addEventListener('pointercancel', end)
-    // 拖动过就别触发点击切换（capture 阶段拦在目标处理器之前）
-    host.addEventListener('click', function (ev) { if (moved) { ev.stopPropagation(); moved = false } }, true)
+    // 拖动过的那一次点击不要触发"展开/收起/切档"，用一次性标记拦一下。
+    // 注意这里必须**总是**把 moved 复位，否则一次拖动会永久吞掉后续点击。
+    host.addEventListener('click', function (ev) {
+      if (moved) {
+        moved = false
+        ev.stopPropagation()
+        ev.preventDefault()
+        return
+      }
+      moved = false
+    }, true)
   }
 
   // ==========================================================================
@@ -749,12 +783,12 @@
     var dockBtn = document.createElement('button')
     dockBtn.className = 'dshhw-chip'
     dockBtn.type = 'button'
-    var shown = modeKey !== 'dismissed' && modeKey !== 'off'
+    var shown = modeKey !== 'dismissed'
     dockBtn.textContent = shown ? '隐藏悬浮提示' : '显示悬浮提示'
     dockBtn.title = '整个界面最多只显示一个硬件读数悬浮提示'
     dockBtn.onclick = function () {
       var cur = readMode()
-      var hidden = cur === 'dismissed' || cur === 'off'
+      var hidden = cur === 'dismissed'
       writeMode(hidden ? 'full' : 'dismissed')
       dockBtn.textContent = hidden ? '隐藏悬浮提示' : '显示悬浮提示'
       render()
@@ -936,7 +970,7 @@
       // 看不到的数据付这份进程开销。（变化提醒也随之暂停 —— 这是"藏起来"的应有代价，
       // 从面板恢复时会 poll(true) 立刻补齐。）
       var m = readMode()
-      if (m === 'off' || m === 'dismissed') return
+      if (m === 'dismissed') return
       if (document.hidden && state.failing > 12) return
       poll()
     }, POLL_MS)
