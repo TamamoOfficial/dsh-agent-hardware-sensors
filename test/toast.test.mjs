@@ -25,7 +25,14 @@ function makeEl(tag) {
     set innerHTML(_v) { this.children.length = 0 },
     addEventListener(t, fn) { (this._listeners[t] = this._listeners[t] || []).push(fn) },
     removeEventListener() {},
-    dispatch(t, ev) { for (const fn of this._listeners[t] || []) fn(ev || {}) },
+    // 伪 DOM 必须同时触发 addEventListener 注册的监听器**和** onclick 属性 ——
+    // 挂件里两类都用（关闭按钮是 onclick，容器交互也有 addEventListener）。
+    // 只派发其中一类会静默漏掉点击（这一处 bug 在 dismiss.test.mjs 里也踩过）。
+    dispatch(t, ev) {
+      const e = ev || {}
+      if (typeof this.onclick === 'function') { try { this.onclick(e) } catch (err) { throw err } }
+      for (const fn of this._listeners[t] || []) fn(e)
+    },
     getBoundingClientRect() { return this._rect },
     querySelector() { return null }, querySelectorAll() { return [] }, closest() { return null },
   }
@@ -112,14 +119,32 @@ const baseSensors = [
   }
 }
 
-// ── 场景 2：重复的同一条 changes 不应刷屏（去重） ──
+// ── 场景 2：同一条 changes 重复投递时**绝不重弹**（指纹去重）──
+// 语义：store 已改成"取走即清空"，正常情况下不会重发；这里额外验证前端的
+// 第二道防线 —— 即使宿主重发同一事件，也不再弹（用户点叉关掉又被弹回来的
+// 那个 bug 就是这么修的）。用 warn 类（常驻，不自动消失）便于断言。
 {
   const w = boot({ live: true, sources: baseSources, matched: 1, sensors: baseSensors, changes: [] })
   await w.flush()
-  const evt = [{ source: 'hwinfo', from: 'offline', to: 'online', count: 2, actionable: false }]
-  await w.feed({ live: true, sources: baseSources, matched: 1, sensors: baseSensors, changes: evt })
-  await w.feed({ live: true, sources: baseSources, matched: 1, sensors: baseSensors, changes: evt })
-  ok('同一条提醒只显示一条（去重）', w.toasts.length === 1, 'toasts=' + w.toasts.length)
+  const evt = [{ source: 'hwinfo', from: 'online', to: 'offline', count: 0, actionable: true }]
+  const offSources = [
+    { app: 'hwinfo', available: false, transport: 'none', count: 0, reason: 'no-shared-memory' },
+    { app: 'aida64', available: false, transport: 'none', count: 0, reason: 'no-shared-memory' },
+  ]
+  await w.feed({ live: false, sources: offSources, matched: 0, sensors: [], changes: evt })
+  ok('第一次投递弹出一条', w.toasts.length === 1, 'toasts=' + w.toasts.length)
+  await w.feed({ live: false, sources: offSources, matched: 0, sensors: [], changes: evt })
+  ok('第二次投递同一事件：不重弹（总数仍为 1）', w.toasts.length === 1, 'toasts=' + w.toasts.length)
+  // 关掉之后再投递同一事件，也不该回来
+  // toast 结构是：[ico, body, ×]，所以 × 是 toast 的直接子元素
+  const xs = w.body.children
+    .filter((c) => String(c.className).split(/\s+/).indexOf('dshhw-toast') >= 0)
+    .map((t2) => (t2.children || []).filter((c) => String(c.className) === 'dshhw-toast-x')[0])
+    .filter(Boolean)
+  for (const x of xs) x.dispatch('click', { stopPropagation() {} })
+  ok('用户关闭后提醒消失', w.toasts.length === 0, 'toasts=' + w.toasts.length + ' clicked=' + xs.length)
+  await w.feed({ live: false, sources: offSources, matched: 0, sensors: [], changes: evt })
+  ok('关闭后同一事件重发也不再弹（核心修复）', w.toasts.length === 0, 'toasts=' + w.toasts.length)
 }
 
 // ── 场景 3：软件退出（注册表残留）→ warn 提示 + 动作按钮 ──

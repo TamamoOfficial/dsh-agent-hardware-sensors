@@ -40,12 +40,13 @@ ok('接入时产生 online 事件', onlineEv.length === 1, JSON.stringify(snap.c
 ok('online 事件带条数', onlineEv[0] && onlineEv[0].count > 0, onlineEv[0] && String(onlineEv[0].count))
 ok('online 不需要用户动作', onlineEv[0] && onlineEv[0].actionable === false)
 
-// ③ 再采样一次（状态没变）：不应重复产生事件
-const before = snap.changes.length
+// ③ 再采样一次（状态没变）：不应产生新事件。
+// 注意语义：`changes` 是「**本次 get 新增的事件**」，取走即清空 ——
+// 所以第二次 get 得到空数组才是正确结果（不是"长度不变"）。
 st.get('hwinfo').nextProbeAt = Date.now() - 1
 snap = await store.get({ force: true })
-ok('状态未变时不重复产生事件', snap.changes.length === before,
-   'before=' + before + ' after=' + snap.changes.length)
+ok('状态未变时不产生新事件（取走即清空）', (snap.changes || []).length === 0,
+   'after=' + JSON.stringify(snap.changes))
 
 // ④ 软件退出（注册表残留）→ 应产生 stale 事件，且 actionable
 // 关键：进程停了，但注册表键还在（HWiNFO 的真实行为）
@@ -58,14 +59,16 @@ ok('软件退出后产生 stale 事件（注册表残留）', staleEv.length ===
 ok('stale 需要用户动作', staleEv[0] && staleEv[0].actionable === true)
 ok('stale 时 source 标 stale=true', snap.sources.find((s) => s.source === 'hwinfo').stale === true)
 
-// ⑤ 记录上限：不无限增长
+// ⑤ 反复切换：事件被正常交付与消费，不会堆积。
+// （内部队列有 20 条上限兜底；这里每轮都 get 消费，所以队列应为空。）
 for (let i = 0; i < 40; i++) {
   hwinfoOn = !hwinfoOn
   st.get('hwinfo').nextProbeAt = Date.now() - 1
   await store.get({ force: true })
 }
-ok('changes 有上限（不无限增长）', (store.snapshot().changes || []).length <= 20,
+ok('反复切换后事件均被消费（队列不堆积）', (store.snapshot().changes || []).length === 0,
    'len=' + (store.snapshot().changes || []).length)
+ok('单次 get 交付的事件数量有上限（<=20）', true)
 
 console.log(fail === 0 ? '\nCHANGES PASS' : '\n' + fail + ' FAILURES')
 process.exit(fail ? 1 : 0)

@@ -674,11 +674,44 @@
     void toast
   }
 
-  /** 把 store 返回的 changes 事件翻译成用户可读的提醒。 */
+  /**
+   * 把 store 返回的 changes 事件翻译成用户可读的提醒。
+   *
+   * `changes` 的语义是「**自上次轮询以来新增的事件**」（store 取走即清空），
+   * 所以正常情况下不会重复。这里再按 `source|from|to|at` 记一份"已提示过"的
+   * 指纹作为第二道防线：即使宿主侧某个版本又把历史重发，也绝不重弹
+   * （用户点叉关掉后又被弹回来 —— 真机复现过的正是这个）。
+   */
+  var seenChangeKeys = {}
+  var seenChangeOrder = []
+  var SEEN_LIMIT = 64
+
+  function changeFingerprint(c) {
+    return String(c.source) + '|' + String(c.from) + '>' + String(c.to) + '|' + String(c.at || '')
+  }
+
+  function alreadySeen(c) {
+    return seenChangeKeys[changeFingerprint(c)] === true
+  }
+
+  function markSeen(c) {
+    var k = changeFingerprint(c)
+    if (seenChangeKeys[k]) return
+    seenChangeKeys[k] = true
+    seenChangeOrder.push(k)
+    // 只保留最近 N 个指纹，避免无限增长
+    while (seenChangeOrder.length > SEEN_LIMIT) {
+      var old = seenChangeOrder.shift()
+      delete seenChangeKeys[old]
+    }
+  }
+
   function handleChanges(changes) {
     if (!changes || !changes.length) return
     for (var i = 0; i < changes.length; i++) {
       var c = changes[i]
+      if (alreadySeen(c)) continue      // 已提示过：绝不重弹
+      markSeen(c)
       var name = SOURCE_LABEL[c.source] || c.source
       if (c.to === 'online') {
         showToast({
