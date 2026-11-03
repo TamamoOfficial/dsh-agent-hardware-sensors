@@ -29,6 +29,7 @@ const ORDER = [
   'toast.test.mjs',
   'toast_noreshow.test.mjs',
   'dismiss.test.mjs',
+  'panel_poll.test.mjs',
   'viewport.test.mjs',
   'position_memory.test.mjs',
   'realbrowser.test.mjs',

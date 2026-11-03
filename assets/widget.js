@@ -860,7 +860,8 @@
     var refreshBtn = document.createElement('button')
     refreshBtn.className = 'dshhw-chip'
     refreshBtn.textContent = '刷新'
-    refreshBtn.onclick = function () { poll(); setTimeout(function () { renderPanelBody(bodyEl, input.value) }, 400) }
+    // 「刷新」= 强制重采一次，而不是复用宿主 ≤1.2s 的缓存
+    refreshBtn.onclick = function () { poll(true); setTimeout(function () { renderPanelBody(bodyEl, input.value) }, 400) }
     tools.appendChild(refreshBtn)
 
     // 悬浮提示开关：Shift+点击小点会彻底收起卡片，这里是唯一可靠的恢复入口。
@@ -894,8 +895,10 @@
     updatePanelHeader(s)
     document.addEventListener('keydown', panelKey)
 
-    // 打开时强制刷一次，确保看到最新
-    poll()
+    // 打开时强制刷一次，确保看到最新（面板是"有人正在看"的状态：即使悬浮提示
+    // 处于 dismissed，这里的 poll(true) 也要越过宿主 ≤1.2s 缓存立刻采样，
+    // 之后由 startPolling 的定时器持续跟随 —— 见 startPolling 里的判据。）
+    poll(true)
   }
 
   function updatePanelHeader(sub) {
@@ -1055,8 +1058,12 @@
       // 就意味着每 2s 派生一次 powershell 探测。用户既然把卡片藏了，就不该再为他
       // 看不到的数据付这份进程开销。（变化提醒也随之暂停 —— 这是"藏起来"的应有代价，
       // 从面板恢复时会 poll(true) 立刻补齐。）
+      // ⚠ **面板开着时必须继续采样**：收起的是悬浮提示卡片，不是数据。
+      //   早先这里只判 `dismissed` 就 return，于是"收起卡片 → 打开详细面板"后
+      //   面板里的读数再也不更新（打开时那一次 poll 之后永远静止），用户只能点
+      //   「刷新」、或把悬浮提示重新显示出来再收起，才能让数据活过来 —— 真机复现。
       var m = readMode()
-      if (m === 'dismissed') return
+      if (m === 'dismissed' && !panel) return
       if (document.hidden && state.failing > 12) return
       poll()
     }, POLL_MS)
