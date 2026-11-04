@@ -25,10 +25,10 @@
 
 ```powershell
 # 桌面端：用客户端自带的 CLI
-& "<安装目录>\resources\runtime\cli\bin\dsh.cmd" plugin --profile desktop add github:EritXiaodou/dsh-agent-hardware-sensors
+& "<安装目录>\resources\runtime\cli\bin\dsh.cmd" plugin --profile desktop add github:TamamoOfficial/dsh-agent-hardware-sensors
 
 # Web profile
-dsh plugin --profile web add github:EritXiaodou/dsh-agent-hardware-sensors
+dsh plugin --profile web add github:TamamoOfficial/dsh-agent-hardware-sensors
 ```
 
 > 已验证：该规格会写入 profile 的 `dependencies` 与 `dsh.profile.bundles`，装成真实目录（非软链）。
@@ -37,7 +37,7 @@ dsh plugin --profile web add github:EritXiaodou/dsh-agent-hardware-sensors
 ### 方式 B：克隆后本地 link 安装（开发/改代码用）
 
 ```powershell
-git clone https://github.com/EritXiaodou/dsh-agent-hardware-sensors
+git clone https://github.com/TamamoOfficial/dsh-agent-hardware-sensors
 & "<安装目录>\resources\runtime\cli\bin\dsh.cmd" plugin --profile desktop add link:<克隆下来的目录绝对路径>
 ```
 
@@ -56,7 +56,7 @@ git clone https://github.com/EritXiaodou/dsh-agent-hardware-sensors
 更新到最新版：
 
 ```powershell
-& "<安装目录>\resources\runtime\cli\bin\dsh.cmd" plugin --profile desktop add github:EritXiaodou/dsh-agent-hardware-sensors
+& "<安装目录>\resources\runtime\cli\bin\dsh.cmd" plugin --profile desktop add github:TamamoOfficial/dsh-agent-hardware-sensors
 ```
 
 ## 开启数据导出（任选其一，或都开）
